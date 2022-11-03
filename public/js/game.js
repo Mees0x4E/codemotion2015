@@ -56,9 +56,9 @@ function Pong() {
 
     var ballSize = 10;
     var halfBallSize = ballSize / 2;
-    var padSize = 8;
+    var padSize = 13;
     var halfPadSize = padSize / 2;
-    var moveFactor = 30;
+    var moveFactor = 100;
     var maxScore = 10;
 
     function randomizeBallPosition() {
@@ -386,15 +386,22 @@ function Pong() {
                 const maxFreq = 300;
                 var desiredPosition = (frequency-minFreq) * (p.body.height - game.world.height) / (maxFreq - minFreq) + game.world.height - pH2;
 
-                console.debug(frequency, desiredPosition);
+                // console.debug(frequency, desiredPosition);
 
                 var desiredMovement = desiredPosition - p.position.y;
-                if (desiredMovement < -moveFactor) {
-                    desiredMovement = -moveFactor;
+
+                // that weird thing at the end is a formula made such that if amplitude is close to zero, 
+                // the movement is VERY close to zero. But if amplitude is above like 1.5, the movement is already at 90% maximum
+                var tmp = 100 * amplitude * amplitude;
+                var maxVelocity =  moveFactor * (1 - 1 / (tmp + tmp * tmp + 1));
+
+                if (desiredMovement < -maxVelocity) {
+                    desiredMovement = -maxVelocity;
                 }
-                else if (desiredMovement > moveFactor) {
-                    desiredMovement = moveFactor;
+                else if (desiredMovement > maxVelocity) {
+                    desiredMovement = maxVelocity;
                 }
+
                 p.position.y += desiredMovement;
                 /*else {
                     switch (currentPlayer) {
