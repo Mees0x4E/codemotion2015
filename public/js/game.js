@@ -44,7 +44,6 @@ function Pong() {
 
     var host = false;
     var paddles = [];
-    var floorAndCeiling = [];
 
     var sprites;
     var ball;
@@ -59,15 +58,22 @@ function Pong() {
     var halfBallSize = ballSize / 2;
     var padSize = 8;
     var halfPadSize = padSize / 2;
-    var moveFactor = 5;
+    var moveFactor = 30;
     var maxScore = 10;
+
+    function randomizeBallPosition() {
+        var sign1 = game.rnd.integerInRange(0,1) == 0 ? 1 : -1;
+        var sign2 = game.rnd.integerInRange(0,1) == 0 ? 1 : -1;
+        ball.body.velocity.x = game.rnd.integerInRange(40, 100) * sign1;
+        ball.body.velocity.y = game.rnd.integerInRange(40, 100) * sign2;
+    }
 
     function demoMovements(inactivePlayers) {
         if (inactivePlayers == undefined) {
             inactivePlayers = {0:true, 1:true};
         }
 
-        for (var i in paddles) {
+        for (var i = 0; i < paddles.length; i++) {
             if (!inactivePlayers[i]) {
                 continue;
             }
@@ -126,9 +132,9 @@ function Pong() {
             ball.anchor.setTo(0.5, 0.5);
 
             game.physics.enable([ball], Phaser.Physics.ARCADE);
-            var sign = game.rnd.integerInRange(0,1) == 0 ? 1 : -1;
-            ball.body.velocity.x = game.rnd.integerInRange(100, 250) * sign;
-            ball.body.velocity.y = game.rnd.integerInRange(100, 250) * sign;
+
+            randomizeBallPosition();
+
             ball.body.bounce.x = 1;
             ball.body.bounce.y = 1;
             ball.body.minBounceVelocity = 0;
@@ -140,8 +146,8 @@ function Pong() {
 
             paddles[0].tint = 0xff0000;
             paddles[1].tint = 0x0000ff;
-
-            for (var i in paddles) {
+            
+            for (var i = 0; i < paddles.length; i++) {
                 paddles[i].op = paddles[i].position;
                 paddles[i].player = i;
                 paddles[i].name = 'Player' + (parseInt(i) + 1);
@@ -232,7 +238,7 @@ function Pong() {
                     ball.body.velocity.x = 0;
                     ball.body.velocity.y = 0;
                 case 2:
-                    for (var i in paddles) {
+                    for (var i = 0; i < paddles.length; i++) {
                         paddles[i].position.setTo(paddles[i].op.x,paddles[i].op.y);
                     }
                     this.text.text = "GO!";
@@ -260,6 +266,12 @@ function Pong() {
             socket.on('hostUpdate', function(data) {
                 self.updateHost(data);
             });
+
+            // init audio input
+            if (!master) {
+                initializeTuner();
+            }
+
             /*socket.on('playerLeft', function (data) {
                 self.inactivePlayers[parseInt(data.playerLeft)] = true;
             });
@@ -281,9 +293,7 @@ function Pong() {
                 ball.body.velocity.y = 0;
             }
             else {
-                var sign = game.rnd.integerInRange(0,1) == 0 ? 1 : -1;
-                ball.body.velocity.x = game.rnd.integerInRange(100, 250) * sign;
-                ball.body.velocity.y = game.rnd.integerInRange(100, 250) * sign;
+                randomizeBallPosition();
             }
 
             var scoresPos = [
@@ -291,7 +301,7 @@ function Pong() {
                 {w: game.world.centerX + 100, h: game.world.centerY}
             ];
 
-            for (var i in paddles) {
+            for (var i = 0; i < paddles.length; i++) {
                 paddles[i].position.setTo(paddles[i].op.x,paddles[i].op.y);
                 var style = {font: "50px Arial", fill: "#" + colors[i], align: "center"};
                 paddles[i].scoreLabel = game.add.text(scoresPos[i].w, scoresPos[i].h, "0", style);
@@ -302,7 +312,7 @@ function Pong() {
         },
         update: function () {
             if (this.gameRunning) {
-                for (var i in paddles) {
+                for (var i = 0; i < paddles.length; i++) {
                     if (paddles[i].scoreLabel.text >= maxScore) {
                         this.endGame(paddles[i]);
                         return;
@@ -313,6 +323,9 @@ function Pong() {
                     game.physics.arcade.collide(ball, paddles, function (ball, player) {
                         ball.tint = player.tint;
                         ball.player = player.player;
+                        
+                        ball.body.velocity.x *= 1.2;
+                        ball.body.velocity.y *= 1.2;
 
                         /*var data = {socketId: socket.id};
                         data['ballTint'] = ball.tint;
@@ -358,29 +371,31 @@ function Pong() {
                     ball.body.position.setTo(game.world.centerX, game.world.centerY);
                     ball.player = -1;
                     ball.tint = 0xffffff;
-
-                    var sign = game.rnd.integerInRange(0,1) == 0 ? 1 : -1;
-                    ball.body.velocity.x = game.rnd.integerInRange(100, 250) * sign;
-                    ball.body.velocity.y = game.rnd.integerInRange(100, 250) * sign;
+                    
+                    randomizeBallPosition();
                 }
             }
         },
         inputManagement: function () {
             if (!master) {
                 var p = paddles[currentPlayer];
-                console.log(p);
-                if (cursors.up.isDown) {
-                    p.position.y -= moveFactor;
+                var pH2 = p.body.height/2;
+
+                // from [A,B] to [a,b] with:  (val - A)*(b-a)/(B-A) + a
+                const minFreq = 100;
+                const maxFreq = 300;
+                var desiredPosition = (frequency-minFreq) * (p.body.height - game.world.height) / (maxFreq - minFreq) + game.world.height - pH2;
+
+                console.debug(frequency, desiredPosition);
+
+                var desiredMovement = desiredPosition - p.position.y;
+                if (desiredMovement < -moveFactor) {
+                    desiredMovement = -moveFactor;
                 }
-                else if (cursors.down.isDown) {
-                    p.position.y += moveFactor;
+                else if (desiredMovement > moveFactor) {
+                    desiredMovement = moveFactor;
                 }
-                else if (game.input.activePointer.y >= p.position.y + moveFactor) {
-                    p.position.y += moveFactor;
-                }
-                else if (game.input.activePointer.y <= p.position.y - moveFactor) {
-                    p.position.y -= moveFactor;
-                }
+                p.position.y += desiredMovement;
                 /*else {
                     switch (currentPlayer) {
                         case 0: case 2:
@@ -402,7 +417,6 @@ function Pong() {
                     }
                 }*/
 
-                var pH2 = p.body.height/2;
                 if (p.position.y < pH2) {
                     p.position.y = pH2;
                 }
@@ -414,7 +428,7 @@ function Pong() {
         endGame: function (player) {
             this.gameRunning = false;
 
-            for (var i in paddles) {
+            for (var i = 0; i < paddles.length; i++) {
                 paddles[i].scoreLabel.destroy();
                 paddles[i].destroy();
             }
@@ -481,7 +495,7 @@ function Pong() {
         render: function () {
             if (debug) {
                 game.debug.body(ball);
-                for (var i in paddles) {
+                for (var i = 0; i < paddles.length; i++) {
                     game.debug.body(paddles[i]);
                 }
             }
