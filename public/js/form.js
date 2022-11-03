@@ -21,12 +21,12 @@ $(function() {
             if ($playersCount.length > 0) {
                 $playersCount.text(data.playersCount);
             }
-            if (data.playersCount == 4) {
+            if (data.playersCount == 2) {
                 $("#connect").addClass("hide");
                 pong.sync({ hosting: true, playersCount: data.playersCount });
             }
         });
-        socket.on('playerLeft', function (data) {
+        /*socket.on('playerLeft', function (data) {
             data.playersCount = parseInt(data.playersCount);
 
             if ($playersCount.length > 0) {
@@ -36,7 +36,7 @@ $(function() {
                 $("#connect").addClass("hide");
                 pong.sync({ hosting: true, playersCount: data.playersCount });
             }
-        });
+        });*/
         socket.emit('host', '', function(data) {
             new QRCode(document.getElementById("qrcode"),
                 {

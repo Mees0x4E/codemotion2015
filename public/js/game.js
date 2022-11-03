@@ -44,6 +44,8 @@ function Pong() {
 
     var host = false;
     var paddles = [];
+    var floorAndCeiling = [];
+
     var sprites;
     var ball;
 
@@ -51,7 +53,7 @@ function Pong() {
     var master = false;
     var cursors;
 
-    var colors = ["ff0000", "00ff00", "0000ff", "ffff00"];
+    var colors = ["ff0000", "0000ff"];
 
     var ballSize = 10;
     var halfBallSize = ballSize / 2;
@@ -62,7 +64,7 @@ function Pong() {
 
     function demoMovements(inactivePlayers) {
         if (inactivePlayers == undefined) {
-            inactivePlayers = {0:true, 1:true, 2:true, 3:true};
+            inactivePlayers = {0:true, 1:true};
         }
 
         for (var i in paddles) {
@@ -72,21 +74,21 @@ function Pong() {
 
             var p = paddles[i];
             var pH2 = p.body.height/2;
-            var pW2 = p.body.width/2;
-            switch (parseInt(i)) {
-                case 0:
-                case 2:
-                    if (ball.body.x >= pW2 && ball.body.x <= game.world.width - pW2) {
-                        p.position.x = ball.position.x;
-                    }
-                break;
-                case 1:
-                case 3:
-                    if (ball.body.y >= pH2 && ball.body.y <= game.world.height - pH2) {
-                        p.position.y = ball.position.y;
-                    }
-                break;
+            if (ball.body.y >= pH2 && ball.body.y <= game.world.height - pH2) {
+                p.position.y = ball.position.y;
             }
+        }
+        reflectBall();
+    }
+
+    function reflectBall() {
+        if (ball.body.y < halfBallSize) {
+            ball.body.y = halfBallSize;
+            ball.body.velocity.y = Math.abs(ball.body.velocity.y);
+        }
+        else if (ball.body.y > game.world.height - halfBallSize) {
+            ball.body.y = game.world.height - halfBallSize;
+            ball.body.velocity.y = -Math.abs(ball.body.velocity.y);
         }
     }
 
@@ -133,26 +135,17 @@ function Pong() {
             ball.player = -1;
 
             paddles = [];
-            paddles.push(sprites.create(game.world.centerX - halfPadSize, halfPadSize, 'pixel'));
-            paddles.push(sprites.create(halfPadSize, game.world.height / 2 - halfPadSize, 'pixel'));
-            paddles.push(sprites.create(game.world.centerX - halfPadSize, game.world.height - halfPadSize, 'pixel'));
+            paddles.push(sprites.create(halfPadSize, game.world.centerY - halfPadSize, 'pixel'));
             paddles.push(sprites.create(game.world.width - halfPadSize, game.world.centerY - halfPadSize, 'pixel'));
 
             paddles[0].tint = 0xff0000;
-            paddles[1].tint = 0x00ff00;
-            paddles[2].tint = 0x0000ff;
-            paddles[3].tint = 0xffff00;
+            paddles[1].tint = 0x0000ff;
 
             for (var i in paddles) {
                 paddles[i].op = paddles[i].position;
                 paddles[i].player = i;
                 paddles[i].name = 'Player' + (parseInt(i) + 1);
-                if (i % 2 == 0) {
-                    paddles[i].scale.setTo(padSize*10, 10);
-                }
-                else {
-                    paddles[i].scale.setTo(10, padSize*10);
-                }
+                paddles[i].scale.setTo(10, padSize*10);
                 paddles[i].anchor.setTo(0.5, 0.5);
                 game.physics.enable([ paddles[i] ], Phaser.Physics.ARCADE);
                 paddles[i].body.bounce.x = 1;
@@ -177,26 +170,26 @@ function Pong() {
         countdown: false,
         init: function (data) {
             game.stage.disableVisibilityChange = true;
-
             var self = this;
 
             self.players = parseInt(data.playersCount);
             if (data.hosting) {
-                self.p = 0;
+                self.p = -1;
                 host = true;
                 socket.emit('startCounting', socket.id);
             }
             else {
-                self.p = data.playersCount -1;
+                self.p = data.playersCount - 1;
                 socket.on('joined', function (data) {
                     self.players = parseInt(data.playersCount);
                 });
-                socket.on('playerLeft', function (data) {
+                /*socket.on('playerLeft', function (data) {
                     self.players = parseInt(data.playersCount);
-                });
+                });*/
             }
             socket.on('timeOut', function(data, ack) {
                 self.countdown = parseInt(data.times);
+                console.log("countdown: " + self.countdown);
                 ack(socket.id);
             });
         },
@@ -205,7 +198,7 @@ function Pong() {
         },
         create: function () {
             var style = {font: "30px Arial", fill: "#ffffff", align: "center"};
-            this.text = game.add.text(game.world.centerX, game.world.centerY, "Awaiting other players (" + this.players + "/4)", style);
+            this.text = game.add.text(game.world.centerX, game.world.centerY, "Awaiting players (" + this.players + "/2)", style);
             this.text.anchor.setTo(0.5, 0.5);
         },
         update: function () {
@@ -223,11 +216,11 @@ function Pong() {
             if (this.countdown !== false) {
                 this.text.text = "Ready to start...";
             }
-            else if (host || this.players == 4) {
+            else if (host || this.players == 2) {
                 this.text.text = "Waiting for sync...";
             }
             else {
-                this.text.text = "Awaiting other players (" + this.players + "/4)";
+                this.text.text = "Awaiting other players (" + this.players + "/2)";
             }
         },
         initGame: function(phase) {
@@ -246,7 +239,7 @@ function Pong() {
                 case 3:
                     socket.removeAllListeners('joined');
                     socket.removeAllListeners('timeOut');
-                    socket.removeAllListeners('playerLeft');
+                    //socket.removeAllListeners('playerLeft');
                     this.text.destroy();
                     game.state.start("game", false, false, { player: this.p });
                 break;
@@ -262,13 +255,13 @@ function Pong() {
 
             var self = this;
             currentPlayer = data.player;
-            master = data.player == 0;
+            master = data.player == -1;
 
-            socket.on('playerLeft', function (data) {
-                self.inactivePlayers[parseInt(data.playerLeft)] = true;
+            socket.on('hostUpdate', function(data) {
+                self.updateHost(data);
             });
-            socket.on('clientUpdate', function(data) {
-                self.updateClient(data);
+            /*socket.on('playerLeft', function (data) {
+                self.inactivePlayers[parseInt(data.playerLeft)] = true;
             });
             socket.on('clientUpdateScores', function(data) {
                 self.updateClientScores(data);
@@ -280,7 +273,7 @@ function Pong() {
                 master = true;
                 ball.body.velocity.x = ball.currentSpeedX;
                 ball.body.velocity.y = ball.currentSpeedY;
-            });
+            });*/
         },
         create: function () {
             if (!master) {
@@ -294,9 +287,7 @@ function Pong() {
             }
 
             var scoresPos = [
-                {w: game.world.centerX, h: game.world.centerY - 100},
                 {w: game.world.centerX - 100, h: game.world.centerY},
-                {w: game.world.centerX, h: game.world.centerY + 100},
                 {w: game.world.centerX + 100, h: game.world.centerY}
             ];
 
@@ -323,9 +314,9 @@ function Pong() {
                         ball.tint = player.tint;
                         ball.player = player.player;
 
-                        var data = {socketId: socket.id};
+                        /*var data = {socketId: socket.id};
                         data['ballTint'] = ball.tint;
-                        socket.emit('gameBall', data);
+                        socket.emit('gameBall', data);*/
                     });
                     this.checkScore();
                 }
@@ -337,29 +328,10 @@ function Pong() {
         checkScore: function () {
             if (master) {
                 var scored = false;
-                if (ball.body.y < -ball.body.height) {
-                    scored = true;
-                    if (ball.player == -1 || ball.player == 0) {
-                        paddles[0].scoreLabel.text--;
-                        scored = true;
-                    }
-                    else {
-                        paddles[ball.player].scoreLabel.text++;
-                    }
-                }
-                else if (ball.body.y > game.world.height + ball.body.height) {
-                    scored = true;
-                    if (ball.player == -1 || ball.player == 2) {
-                        paddles[2].scoreLabel.text--;
-                    }
-                    else {
-                        paddles[ball.player].scoreLabel.text++;
-                    }
-                }
-                else if (ball.body.x < -ball.body.width) {
+                if (ball.body.x < -ball.body.width) {
                     scored = true;
                     if (ball.player == -1 || ball.player == 1) {
-                        paddles[1].scoreLabel.text--;
+                        paddles[0].scoreLabel.text--;
                     }
                     else {
                         paddles[ball.player].scoreLabel.text++;
@@ -368,7 +340,7 @@ function Pong() {
                 else if (ball.body.x > game.world.width + ball.body.width) {
                     scored = true;
                     if (ball.player == -1 || ball.player == 3) {
-                        paddles[3].scoreLabel.text--;
+                        paddles[1].scoreLabel.text--;
                     }
                     else {
                         paddles[ball.player].scoreLabel.text++;
@@ -376,12 +348,12 @@ function Pong() {
                 }
 
                 if (scored) { //reset ball position
-                    var data = { socketId: socket.id };
+                    /*var data = { socketId: socket.id };
                     data['scores'] = [];
                     for(var i in paddles) {
                         data['scores'].push(parseInt(paddles[i].scoreLabel.text));
                     }
-                    socket.emit('gameScores', data);
+                    socket.emit('gameScores', data);*/
 
                     ball.body.position.setTo(game.world.centerX, game.world.centerY);
                     ball.player = -1;
@@ -394,72 +366,49 @@ function Pong() {
             }
         },
         inputManagement: function () {
-            var p = paddles[currentPlayer];
+            if (!master) {
+                var p = paddles[currentPlayer];
+                console.log(p);
+                if (cursors.up.isDown) {
+                    p.position.y -= moveFactor;
+                }
+                else if (cursors.down.isDown) {
+                    p.position.y += moveFactor;
+                }
+                else if (game.input.activePointer.y >= p.position.y + moveFactor) {
+                    p.position.y += moveFactor;
+                }
+                else if (game.input.activePointer.y <= p.position.y - moveFactor) {
+                    p.position.y -= moveFactor;
+                }
+                /*else {
+                    switch (currentPlayer) {
+                        case 0: case 2:
+                            if (game.input.activePointer.x >= paddles[currentPlayer].position.x + moveFactor) {
+                                p.position.x += moveFactor;
+                            }
+                            else if (game.input.activePointer.x <= paddles[currentPlayer].position.x - moveFactor) {
+                                p.position.x -= moveFactor;
+                            }
+                        break;
+                        case 1: case 3:
+                            if (game.input.activePointer.y >= paddles[currentPlayer].position.y + moveFactor) {
+                                p.position.y += moveFactor;
+                            }
+                            else if (game.input.activePointer.y <= paddles[currentPlayer].position.y - moveFactor) {
+                                p.position.y -= moveFactor;
+                            }
+                        break;
+                    }
+                }*/
 
-            if (cursors.left.isDown || cursors.up.isDown) {
-                switch (currentPlayer) {
-                    case 0:
-                    case 2:
-                        p.position.x -= moveFactor;
-                    break;
-                    case 1:
-                    case 3:
-                        p.position.y -= moveFactor;
-                    break;
+                var pH2 = p.body.height/2;
+                if (p.position.y < pH2) {
+                    p.position.y = pH2;
                 }
-            }
-            else if (cursors.right.isDown || cursors.down.isDown) {
-                switch (currentPlayer) {
-                    case 0:
-                    case 2:
-                        p.position.x += moveFactor;
-                    break;
-                    case 1:
-                    case 3:
-                        p.position.y += moveFactor;
-                    break;
+                else if (p.position.y > game.world.height - pH2) {
+                    p.position.y = game.world.height - pH2;
                 }
-            }
-            else {
-                switch (currentPlayer) {
-                    case 0: case 2:
-                        if (game.input.activePointer.x >= paddles[currentPlayer].position.x + moveFactor) {
-                            p.position.x += moveFactor;
-                        }
-                        else if (game.input.activePointer.x <= paddles[currentPlayer].position.x - moveFactor) {
-                            p.position.x -= moveFactor;
-                        }
-                    break;
-                    case 1: case 3:
-                        if (game.input.activePointer.y >= paddles[currentPlayer].position.y + moveFactor) {
-                            p.position.y += moveFactor;
-                        }
-                        else if (game.input.activePointer.y <= paddles[currentPlayer].position.y - moveFactor) {
-                            p.position.y -= moveFactor;
-                        }
-                    break;
-                }
-            }
-
-            var pH2 = p.body.height/2;
-            var pW2 = p.body.width/2;
-            switch (currentPlayer) {
-                case 0: case 2:
-                    if (p.position.x < pW2) {
-                        p.position.x = pW2;
-                    }
-                    else if (p.position.x > game.world.width - pW2) {
-                        p.position.x = game.world.width - pW2;
-                    }
-                break;
-                case 1: case 3:
-                    if (p.position.y < pH2) {
-                        p.position.y = pH2;
-                    }
-                    else if (p.position.y > game.world.height - pH2) {
-                        p.position.y = game.world.height - pH2;
-                    }
-                break;
             }
         },
         endGame: function (player) {
@@ -476,11 +425,12 @@ function Pong() {
             var text = game.add.text(game.world.centerX, game.world.centerY, wonSentence, style);
             text.anchor.setTo(0.5, 0.5);
 
-            socket.removeAllListeners('playerLeft');
-            socket.removeAllListeners('clientUpdate');
-            socket.removeAllListeners('clientUpdateScores');
-            socket.removeAllListeners('clientUpdateBall');
-            socket.removeAllListeners('becomeHost');
+            socket.removeAllListeners('hostUpdate');
+            // socket.removeAllListeners('playerLeft');
+            // socket.removeAllListeners('clientUpdate');
+            // socket.removeAllListeners('clientUpdateScores');
+            // socket.removeAllListeners('clientUpdateBall');
+            // socket.removeAllListeners('becomeHost');
             socket.removeAllListeners('disconnect');
             socket.removeAllListeners('errorMsg');
             socket.removeAllListeners('error');
@@ -504,55 +454,18 @@ function Pong() {
                 return;
             }
             this.socketTiming = 0;
-            var data = { socketId: socket.id };
-
-            if (master) {
-                data['ball'] = true;
-                data['ballX'] = parseFloat(ball.position.x).toFixed(2);
-                data['ballY'] = parseFloat(ball.position.y).toFixed(2);
-                data['ballSpeedX'] = parseFloat(ball.body.velocity.x).toFixed(2);
-                data['ballSpeedY'] = parseFloat(ball.body.velocity.y).toFixed(2);
-            }
-            else {
-                data['ball'] = false;
-            }
-
-            data['player'] = parseInt(currentPlayer);
-            switch(data['player']) {
-                case 0:
-                case 2:
-                    data['paddle'] = parseFloat(paddles[currentPlayer].position.x).toFixed(2);
-                break;
-                case 1:
-                case 3:
-                    data['paddle'] = parseFloat(paddles[currentPlayer].position.y).toFixed(2);
-                break;
-            }
-
-            socket.emit('gameUpdate', data);
-        },
-        updateClient: function (data) {
-            if (!master && data.ball == true) {
-                ball.position.x = parseFloat(data.ballX);
-                ball.position.y = parseFloat(data.ballY);
-                ball.currentSpeedX = parseFloat(data.ballSpeedX);
-                ball.currentSpeedY = parseFloat(data.ballSpeedY);
-            }
-
-            if (currentPlayer != data.player) {
-                switch(parseInt(data.player)) {
-                    case 0:
-                    case 2:
-                        paddles[data.player].position.x = parseFloat(data.paddle);
-                    break;
-                    case 1:
-                    case 3:
-                        paddles[data.player].position.y = parseFloat(data.paddle);
-                    break;
-                }
+            if (!master) {
+                var data = { socketId: socket.id };
+                data['player'] = parseInt(currentPlayer);
+                data['paddle'] = parseFloat(paddles[currentPlayer].position.y).toFixed(4);
+                socket.emit('gameUpdate', data);
             }
         },
-        updateClientScores: function(data) {
+        updateHost: function (data) {
+            var player = parseInt(data.player);
+            paddles[player].position.y = parseFloat(data.paddle);
+        },
+        /*updateClientScores: function(data) {
             if (!master) {
                 ball.tint = 0xffffff;
                 for(var i in data.scores) {
@@ -564,7 +477,7 @@ function Pong() {
             if (!master) {
                 ball.tint = data.ballTint;
             }
-        },
+        },*/
         render: function () {
             if (debug) {
                 game.debug.body(ball);
